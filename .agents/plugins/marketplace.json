@@ -1,0 +1,20 @@
+{
+  "name": "e3dex-open",
+  "interface": {
+    "displayName": "E3DEX Open"
+  },
+  "plugins": [
+    {
+      "name": "e3dex-open",
+      "source": {
+        "source": "local",
+        "path": "./plugins/e3dex-open"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

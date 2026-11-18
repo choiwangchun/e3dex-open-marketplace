@@ -1,0 +1,14 @@
+{
+  "name": "e3dex-open",
+  "description": "E3DEX Open free plugin marketplace for Claude Code and Codex",
+  "owner": {
+    "name": "E3DEX Team"
+  },
+  "plugins": [
+    {
+      "name": "e3dex-open",
+      "source": "./plugins/e3dex-open",
+      "description": "AVEVA E3D PIPE·Structures·장비·PLAN 작업 도구 (무료 · 로그인 없이 바로 사용)"
+    }
+  ]
+}
