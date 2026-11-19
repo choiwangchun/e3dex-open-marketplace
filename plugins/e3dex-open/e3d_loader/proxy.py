@@ -77,9 +77,11 @@ def error_envelope(operation, exc, request_id=None):
 class Proxy:
     def __init__(self, config, data_dir):
         self.config = config
+        self.data_dir = data_dir
         self.account = Account(config, data_dir, Http(config['server_url']))
         self.free = self.account.free
         self.service = None
+        self.bridge_checked = False
         self.out = sys.stdout.buffer
 
     def write(self, message):
@@ -150,6 +152,10 @@ class Proxy:
                 data = guide(arguments.get('topic'))
                 return tool_result({'ok': True, 'app_version': data.get('core_version'), 'topic': data['topic'],
                                     'plugin_root': str(ROOT), 'text': data['text'], 'topics': data['topics']})
+            if self.free and not self.bridge_checked and name != 'e3d_setup':
+                from .bridge_update import ensure_current
+                ensure_current(self.data_dir)
+                self.bridge_checked = True
         except LoaderError as exc:
             return error_envelope(name, exc, request_id)
         if self.service is None:

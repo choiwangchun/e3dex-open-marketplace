@@ -2,6 +2,7 @@
 import hashlib
 import os
 import platform
+import secrets
 import sys
 import time
 import uuid
@@ -41,12 +42,20 @@ def machine_id(folder):
         path = folder / 'machine-id'
         try:
             raw = path.read_text(encoding='ascii').strip()
-        except OSError:
-            raw = ''
-        if not raw:
-            raw = 'random:' + uuid.uuid4().hex
+        except FileNotFoundError:
             folder.mkdir(parents=True, exist_ok=True)
-            path.write_text(raw, encoding='ascii')
+            temp = path.with_suffix('.' + uuid.uuid4().hex + '.tmp')
+            try:
+                temp.write_text('random:' + uuid.uuid4().hex, encoding='ascii')
+                try:
+                    os.link(temp, path)
+                except FileExistsError:
+                    pass
+            finally:
+                temp.unlink(missing_ok=True)
+            raw = path.read_text(encoding='ascii').strip()
+        if not raw:
+            raise LoaderError('ENROLLMENT_REQUIRED', '저장된 PC 식별자를 복원하세요.')
     # Fixed salt from the plugin's first name (e3dex-free): changing it would give every PC a new id
     # and lift the administrator's blocks.
     return hashlib.sha256(('e3dex-' + 'free\0' + raw).encode('utf-8')).hexdigest()
@@ -163,6 +172,8 @@ class Account:
             status, payload = self.http.request('GET', '/api/v1/session', token=tokens['access_token'], timeout=timeout,
                                                 headers={'X-E3D-App-Version': app_version, 'X-E3D-Loader-Version': LOADER_VERSION})
             if status == 200 and isinstance(payload.get('user'), dict):
+                if self.free and payload.get('device', {}).get('enrollment_required'):
+                    tokens = self._register(timeout, tokens['access_token'])
                 return payload, tokens
             if status == 401 and attempt == 0:
                 tokens = self._refresh(tokens, timeout)
@@ -177,10 +188,31 @@ class Account:
             return self._register(timeout)
         self._fail('LOGIN_REQUIRED')
 
-    def _register(self, timeout=15):
-        status, payload = self.http.request('POST', '/api/v1/free/register', timeout=timeout, form={
+    def _enrollment(self):
+        # Keep this credential across logout, refresh failure, and plugin updates.
+        scope = hashlib.sha256(self.config['server_url'].encode()).hexdigest()[:16]
+        path = self.folder / ('free-enrollment-' + scope + '.json')
+        if not path.exists():
+            temp = path.with_suffix('.' + uuid.uuid4().hex + '.tmp')
+            try:
+                secure_store.save(temp, {'key': secrets.token_hex(32)})
+                try:
+                    os.link(temp, path)  # publish once, including simultaneous first starts
+                except FileExistsError:
+                    pass
+            finally:
+                secure_store.delete(temp)
+        record = secure_store.load(path)
+        if not record or not record.get('key'):
+            raise LoaderError('LOGIN_REQUIRED', '저장된 무료 PC 등록 자격 증명을 읽을 수 없습니다.')
+        return record['key']
+
+    def _register(self, timeout=15, previous_access=None):
+        enrollment = self._enrollment()
+        machine = machine_id(self.folder)
+        status, payload = self.http.request('POST', '/api/v1/free/register', timeout=timeout, token=previous_access, form={
             'client_id': self.config['client_id'], 'device_name': device_name(), 'loader_version': LOADER_VERSION,
-            'machine_id': machine_id(self.folder)})
+            'machine_id': machine, 'enrollment': enrollment})
         if status == 200 and payload.get('access_token'):
             tokens = {'server_url': self.config['server_url'], 'access_token': payload['access_token'],
                       'access_expires_at': int(time.time()) + int(payload.get('expires_in', 3600)),
@@ -188,6 +220,10 @@ class Account:
             secure_store.save(self.token_path, tokens)
             return tokens
         error = payload.get('error')
+        if error == 'enrollment_required':
+            fingerprint = hashlib.sha256(enrollment.encode()).hexdigest()
+            raise LoaderError('ENROLLMENT_REQUIRED', '관리자에게 무료 PC 등록 복구를 요청하세요.',
+                              {'machine_id': machine, 'enrollment_fingerprint': fingerprint})
         if error == 'free_access_disabled':
             self._fail('FREE_ACCESS_ENDED')
         if error == 'access_revoked':

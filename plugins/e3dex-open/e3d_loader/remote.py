@@ -176,7 +176,7 @@ def remote_lint(sources, run_dir, effect):
     results = []
     for item in payload['lint']:
         profile = item['profile']
-        (Path(run_dir) / ('lint-%s.stdout.txt' % profile)).write_bytes(localizer.text(item.get('stdout') or '').encode('utf-8'))
+        (Path(run_dir) / ('lint-%s.stdout.txt' % profile)).write_bytes(localizer.text(item.get('stdout') or item.get('report') or '').encode('utf-8'))
         (Path(run_dir) / ('lint-%s.stderr.txt' % profile)).write_bytes(localizer.text(item.get('stderr') or '').encode('utf-8'))
         if item.get('report') is not None:
             (Path(run_dir) / ('lint-%s.json' % profile)).write_text(localizer.text(item['report']), encoding='utf-8')
