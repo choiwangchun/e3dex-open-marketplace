@@ -1,4 +1,4 @@
-"""First-use upgrade of the installed E3D add-in for the Windows Open plugin."""
+"""First-use upgrade of the installed E3D add-in for the Windows plugin."""
 import hashlib
 import json
 import os

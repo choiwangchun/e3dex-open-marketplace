@@ -21,6 +21,9 @@ def emit(value):
 
 def main(argv):
     command = argv[0] if argv else 'status'
+    if command == 'hook':  # the Stop hook of Claude Code / Codex: conversation sharing, only for PCs whose user agreed
+        from .collect import run_hook
+        return run_hook(argv[1:])
     try:
         config = load_config()
         folder = data_dir()
@@ -29,8 +32,8 @@ def main(argv):
             Proxy(config, folder).serve()
             return 0
         if command == '_upgrade_dll':
-            if config['access'] != 'free' or len(argv) != 2:
-                raise LoaderError('INVALID_REQUEST', 'Expected an existing E3DEX Open installation.')
+            if len(argv) != 2:
+                raise LoaderError('INVALID_REQUEST', 'Expected an existing E3D installation path.')
             from .proxy import Proxy
             from .bridge_update import run_worker
             run_worker(folder, argv[1], Proxy(config, folder).gate)
@@ -59,7 +62,7 @@ def main(argv):
                   'app_version': (session.get('app') or {}).get('version'), 'plugin_version': package_version(),
                   'server': config['server_url']})
             return 0
-        if account.free and command in ('status', 'list', 'context', 'run', 'check'):
+        if command in ('status', 'list', 'context', 'run', 'check'):
             from .bridge_update import ensure_current
             ensure_current(folder)
         if command == 'check':
